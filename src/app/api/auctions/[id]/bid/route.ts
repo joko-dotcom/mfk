@@ -25,6 +25,13 @@ export async function POST(
   const { amount } = parsed.data;
 
   try {
+    const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
+    if (dbUser?.isBlacklisted) {
+      return NextResponse.json(
+        { error: `Akun di-blacklist (${dbUser.blacklistReason ?? "MANUAL"})` },
+        { status: 403 },
+      );
+    }
     const result = await prisma.$transaction(async (tx) => {
       const auction = await tx.auction.findUnique({
         where: { id: params.id },

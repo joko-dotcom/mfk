@@ -68,21 +68,36 @@ enum OrderStatus {
   RELEASED
   REFUNDED
   CANCELLED
+  DEFAULTED
+}
+
+enum BlacklistReason {
+  BID_AND_RUN
+  FRAUD
+  ABUSE
+  MANUAL
 }
 
 model User {
-  id              String         @id @default(cuid())
-  email           String         @unique
-  phone           String?
-  name            String
-  passwordHash    String
-  role            UserRole       @default(BUYER)
-  membershipTier  MembershipTier @default(NONE)
-  membershipUntil DateTime?
-  avatarUrl       String?
-  bio             String?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  id               String           @id @default(cuid())
+  email            String           @unique
+  phone            String?
+  name             String
+  passwordHash     String
+  role             UserRole         @default(BUYER)
+  membershipTier   MembershipTier   @default(NONE)
+  membershipUntil  DateTime?
+  avatarUrl        String?
+  bio              String?
+  whatsappNumber   String?          @unique
+  whatsappVerified Boolean          @default(false)
+  waLinkCode       String?
+  waLinkExpires    DateTime?
+  isBlacklisted    Boolean          @default(false)
+  blacklistReason  BlacklistReason?
+  bidAndRunCount   Int              @default(0)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 
   seller          Seller?
   bids            Bid[]
@@ -96,28 +111,31 @@ model User {
   likes           PostLike[]
   chats           LiveChat[]
   watchlist       Watchlist[]
+  strikes         BlacklistStrike[]
 }
 
 model Seller {
-  id              String       @id @default(cuid())
-  userId          String       @unique
-  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  farmName        String
-  slug            String       @unique
-  description     String?
-  location        String
-  province        String
-  ktpNumber       String?
-  ktpUrl          String?
-  farmPhotoUrl    String?
-  status          SellerStatus @default(PENDING)
-  verified        Boolean      @default(false)
-  topSeller       Boolean      @default(false)
-  championBreeder Boolean      @default(false)
-  rating          Float        @default(0)
-  totalSales      Int          @default(0)
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  id                String       @id @default(cuid())
+  userId            String       @unique
+  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  farmName          String
+  slug              String       @unique
+  description       String?
+  location          String
+  province          String
+  ktpNumber         String?
+  ktpUrl            String?
+  farmPhotoUrl      String?
+  status            SellerStatus @default(PENDING)
+  verified          Boolean      @default(false)
+  topSeller         Boolean      @default(false)
+  championBreeder   Boolean      @default(false)
+  rating            Float        @default(0)
+  totalSales        Int          @default(0)
+  whatsappGroupId   String?
+  whatsappGroupName String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
 
   listings Koi[]
 }
@@ -215,22 +233,61 @@ model LiveChat {
 }
 
 model Order {
-  id              String      @id @default(cuid())
-  koiId           String
-  koi             Koi         @relation(fields: [koiId], references: [id])
-  buyerId         String
-  buyer           User        @relation("BuyerOrders", fields: [buyerId], references: [id])
-  amount          Int
-  feeAmount       Int         @default(0)
-  status          OrderStatus @default(PENDING_PAYMENT)
-  paymentRef      String?
-  shippingAddress String?
-  courier         String?
-  trackingNo      String?
-  oxygenHours     Int?
-  packingNote     String?
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  id                String      @id @default(cuid())
+  koiId             String
+  koi               Koi         @relation(fields: [koiId], references: [id])
+  buyerId           String
+  buyer             User        @relation("BuyerOrders", fields: [buyerId], references: [id])
+  amount            Int
+  feeAmount         Int         @default(0)
+  status            OrderStatus @default(PENDING_PAYMENT)
+  paymentRef        String?
+  shippingAddress   String?
+  courier           String?
+  trackingNo        String?
+  oxygenHours       Int?
+  packingNote       String?
+  paymentDueAt      DateTime?
+  flaggedBidAndRun  Boolean     @default(false)
+  sourceAuctionId   String?
+  notifiedDefaultAt DateTime?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  @@index([status, paymentDueAt])
+}
+
+model BlacklistStrike {
+  id        String          @id @default(cuid())
+  userId    String
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reason    BlacklistReason
+  orderId   String?
+  note      String?
+  createdAt DateTime        @default(now())
+
+  @@index([userId])
+}
+
+model WaBotSession {
+  id          String    @id @default(cuid())
+  label       String    @unique
+  status      String    @default("disconnected")
+  phoneNumber String?
+  lastSeenAt  DateTime?
+  updatedAt   DateTime  @default(now()) @updatedAt
+}
+
+model WaInboundLog {
+  id        String   @id @default(cuid())
+  jid       String
+  userId    String?
+  command   String
+  payload   String?
+  result    String?
+  createdAt DateTime @default(now())
+
+  @@index([jid, createdAt])
 }
 
 model Review {
@@ -312,5 +369,5 @@ model PlatformSetting {
   silverPriceIDR   Int      @default(99000)
   goldPriceIDR     Int      @default(299000)
   platinumPriceIDR Int      @default(999000)
-  updatedAt        DateTime @updatedAt @default(now())
+  updatedAt        DateTime @default(now()) @updatedAt
 }
