@@ -3,7 +3,8 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { publish } from "@/lib/bid-bus";
-import { tierRank } from "@/lib/utils";
+import { tierRank, formatIDR } from "@/lib/utils";
+import { getOrCreateWallet } from "@/lib/wallet";
 
 const schema = z.object({ amount: z.number().int().positive() });
 
@@ -54,12 +55,31 @@ export async function POST(
       if (auction.memberOnly && tierRank(user.membershipTier) < tierRank(auction.minTier)) {
         throw new Error(`Lelang eksklusif member ${auction.minTier}+`);
       }
+      // KB (kelipatan bid): harus kelipatan bidStep dari startingBid
+      if (auction.kind === "KB" && auction.bidStep) {
+        if ((amount - auction.startingBid) % auction.bidStep !== 0) {
+          throw new Error(
+            `Bid harus kelipatan ${formatIDR(auction.bidStep)} dari starting bid`,
+          );
+        }
+      }
+      // BIN-only auction can't be bid
+      if (auction.kind === "BIN") {
+        throw new Error("Lelang BIN: gunakan tombol Buy It Now");
+      }
       const minNext = Math.max(
         auction.currentBid + auction.minIncrement,
         auction.startingBid + auction.minIncrement,
       );
       if (amount < minNext) {
-        throw new Error(`Bid minimal ${minNext}`);
+        throw new Error(`Bid minimal ${formatIDR(minNext)}`);
+      }
+      // Wallet gate: bidder must have enough available balance to cover bid.
+      const wallet = await getOrCreateWallet(user.id, tx);
+      if (wallet.availableBalance < amount) {
+        throw new Error(
+          `Saldo deposit tidak cukup. Tersedia ${formatIDR(wallet.availableBalance)}, bid ${formatIDR(amount)}. Top up dulu di /wallet/deposit.`,
+        );
       }
 
       // Anti-sniper: extend endTime if bid in last N minutes.

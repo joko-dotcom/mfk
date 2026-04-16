@@ -1,5 +1,16 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Users, Fish, Gavel, DollarSign, BadgeCheck } from "lucide-react";
+import {
+  Users,
+  Fish,
+  Gavel,
+  DollarSign,
+  BadgeCheck,
+  Wallet,
+  ShieldAlert,
+  Settings,
+  UserCog,
+} from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import { AdminActions } from "@/components/admin-actions";
@@ -58,6 +69,13 @@ export default async function AdminPage() {
           {formatIDR(salesAgg._sum.feeAmount ?? 0)}
         </p>
         <p className="text-xs text-koi-muted">dari {orders} order</p>
+      </div>
+
+      <div className="mt-6 grid gap-3 md:grid-cols-4">
+        <QuickLink href="/admin/wallet" icon={<Wallet size={16} />} label="Payment &amp; Escrow" />
+        <QuickLink href="/admin/blacklist" icon={<ShieldAlert size={16} />} label="Fraud / BNR" />
+        <QuickLink href="/admin/users" icon={<UserCog size={16} />} label="User Management" />
+        <QuickLink href="/admin/settings" icon={<Settings size={16} />} label="Global Settings" />
       </div>
 
       <section className="mt-8">
@@ -136,5 +154,28 @@ function Stat({ icon, label, value }: { icon: React.ReactNode; label: string; va
       </div>
       <p className="mt-2 font-display text-2xl text-white">{value}</p>
     </div>
+  );
+}
+
+function QuickLink({
+  href,
+  icon,
+  label,
+}: {
+  href: string;
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="card flex items-center gap-3 p-4 transition hover:border-koi-gold/40"
+    >
+      <span className="text-koi-gold">{icon}</span>
+      <span
+        className="text-sm text-white"
+        dangerouslySetInnerHTML={{ __html: label }}
+      />
+    </Link>
   );
 }

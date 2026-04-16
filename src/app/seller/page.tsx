@@ -1,6 +1,16 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Gavel, Plus, Fish, TrendingUp, Eye, BadgeCheck } from "lucide-react";
+import {
+  Gavel,
+  Plus,
+  Fish,
+  TrendingUp,
+  Eye,
+  BadgeCheck,
+  Package,
+  Home,
+  Wallet,
+} from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import { formatIDR, CATEGORY_LABEL } from "@/lib/utils";
@@ -73,6 +83,30 @@ export default async function SellerDashboardPage() {
           label="Penjualan"
           value={formatIDR(salesAgg._sum.amount ?? 0)}
         />
+      </div>
+
+      <div className="mt-6 grid gap-3 md:grid-cols-3">
+        <Link href="/seller/kc" className="card p-4 transition hover:border-koi-gold/40">
+          <Package size={16} className="text-koi-gold" />
+          <p className="mt-2 font-medium text-white">KC / Titip Jual</p>
+          <p className="text-xs text-koi-muted">
+            Host konsinyasi koi hobbyist — fee otomatis dipotong saat laku.
+          </p>
+        </Link>
+        <Link href="/seller/azukari" className="card p-4 transition hover:border-koi-gold/40">
+          <Home size={16} className="text-koi-gold" />
+          <p className="mt-2 font-medium text-white">Azukari</p>
+          <p className="text-xs text-koi-muted">
+            Kelola kontrak titip rawat koi bulanan.
+          </p>
+        </Link>
+        <Link href="/wallet" className="card p-4 transition hover:border-koi-gold/40">
+          <Wallet size={16} className="text-koi-gold" />
+          <p className="mt-2 font-medium text-white">Wallet &amp; Deposit</p>
+          <p className="text-xs text-koi-muted">
+            Saldo tersedia, escrow, deposit jaminan.
+          </p>
+        </Link>
       </div>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[1.4fr_1fr]">
