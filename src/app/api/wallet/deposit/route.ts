@@ -63,6 +63,20 @@ export async function POST(req: Request) {
 
   const autoApprove = AUTO_APPROVE && method === "MOCK";
 
+  // Validate Midtrans config BEFORE creating the deposit row so we don't
+  // leak orphaned PENDING rows when the gateway isn't wired up.
+  const midtransCfg = method === "MIDTRANS" ? getMidtransConfig() : null;
+  if (method === "MIDTRANS" && !midtransCfg) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "Midtrans belum dikonfigurasi di server (MIDTRANS_SERVER_KEY / MIDTRANS_CLIENT_KEY)",
+      },
+      { status: 503 },
+    );
+  }
+
   const deposit = await prisma.$transaction(async (tx) => {
     const dep = await tx.depositRequest.create({
       data: {
@@ -99,24 +113,12 @@ export async function POST(req: Request) {
 
   // For MIDTRANS we mint a Snap transaction right after creating the deposit.
   // The deposit stays PENDING until the `/api/midtrans/webhook` notification
-  // confirms settlement, which then credits the wallet. If Snap fails we let
-  // the caller retry — the DepositRequest row is already persisted.
-  if (method === "MIDTRANS") {
-    const cfg = getMidtransConfig();
-    if (!cfg) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "Midtrans belum dikonfigurasi di server (MIDTRANS_SERVER_KEY / MIDTRANS_CLIENT_KEY)",
-        },
-        { status: 503 },
-      );
-    }
+  // confirms settlement, which then credits the wallet.
+  if (method === "MIDTRANS" && midtransCfg) {
     try {
       const appUrl =
         process.env.NEXTAUTH_URL ?? process.env.APP_URL ?? "http://localhost:3000";
-      const snap = await createSnapTransaction(cfg, {
+      const snap = await createSnapTransaction(midtransCfg, {
         orderId: deposit.id,
         grossAmount: amount,
         customer: {
@@ -133,6 +135,16 @@ export async function POST(req: Request) {
         snap: { token: snap.token, redirectUrl: snap.redirect_url },
       });
     } catch (e) {
+      // Snap creation failed *after* the DepositRequest row was committed.
+      // Mark it REJECTED so it doesn't linger as a ghost PENDING entry that
+      // no webhook will ever resolve.
+      await prisma.depositRequest.updateMany({
+        where: { id: deposit.id, status: "PENDING" },
+        data: {
+          status: "REJECTED",
+          note: `midtrans:snap_error:${e instanceof Error ? e.message : "unknown"}`.slice(0, 500),
+        },
+      });
       return NextResponse.json(
         {
           ok: false,

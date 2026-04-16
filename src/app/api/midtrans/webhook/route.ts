@@ -71,9 +71,11 @@ export async function POST(req: Request) {
     },
   });
 
-  if (outcome === "FAILED" && deposit.status === "PENDING") {
-    await prisma.depositRequest.update({
-      where: { id: deposit.id },
+  if (outcome === "FAILED") {
+    // Atomic CAS so a late `cancel`/`deny` can't overwrite an already-APPROVED
+    // row after a concurrent SETTLED call has credited the wallet.
+    await prisma.depositRequest.updateMany({
+      where: { id: deposit.id, status: "PENDING" },
       data: {
         status: "REJECTED",
         note: `midtrans:${transactionStatus}${fraudStatus ? `/${fraudStatus}` : ""}`,
