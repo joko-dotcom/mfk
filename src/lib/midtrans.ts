@@ -130,7 +130,13 @@ export function verifyNotificationSignature(
       `${payload.order_id}${payload.status_code}${payload.gross_amount}${cfg.serverKey}`,
     )
     .digest("hex");
-  return expected === payload.signature_key;
+  // Constant-time compare so an attacker can't probe the signature byte-by-byte
+  // via wall-clock timing differences.
+  if (expected.length !== payload.signature_key.length) return false;
+  return crypto.timingSafeEqual(
+    Buffer.from(expected, "utf8"),
+    Buffer.from(payload.signature_key, "utf8"),
+  );
 }
 
 /**

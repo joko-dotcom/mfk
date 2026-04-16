@@ -152,7 +152,9 @@ export async function POST(req: Request) {
             e instanceof Error
               ? `Gagal membuat transaksi Midtrans: ${e.message}`
               : "Gagal membuat transaksi Midtrans",
-          deposit,
+          // Reflect the REJECTED status we just wrote above so the client
+          // doesn't treat this as still-PENDING and poll/retry on the dead row.
+          deposit: { ...deposit, status: "REJECTED" as const },
         },
         { status: 502 },
       );
