@@ -83,7 +83,16 @@ export async function POST(req: Request) {
   }
 
   if (outcome === "SETTLED" && deposit.status === "PENDING") {
+    // Re-read inside the transaction to avoid a TOCTOU double-credit if
+    // Midtrans retries (or sends duplicate notifications) concurrently.
+    // Prisma's $transaction wraps everything in a single SQL tx; under
+    // READ COMMITTED the second caller will read the already-APPROVED
+    // status and short-circuit.
     await prisma.$transaction(async (tx) => {
+      const current = await tx.depositRequest.findUnique({
+        where: { id: deposit.id },
+      });
+      if (!current || current.status !== "PENDING") return;
       const updated = await tx.depositRequest.update({
         where: { id: deposit.id },
         data: { status: "APPROVED", approvedAt: new Date() },
