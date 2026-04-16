@@ -142,7 +142,9 @@ export function resolveOutcome(
   fraudStatus: string | undefined,
 ): "SETTLED" | "PENDING" | "FAILED" {
   if (transactionStatus === "capture") {
-    return fraudStatus === "accept" ? "SETTLED" : "PENDING";
+    if (fraudStatus === "accept") return "SETTLED";
+    if (fraudStatus === "deny") return "FAILED";
+    return "PENDING"; // "challenge" and any other values
   }
   if (transactionStatus === "settlement") return "SETTLED";
   if (transactionStatus === "pending") return "PENDING";

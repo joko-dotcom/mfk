@@ -62,29 +62,20 @@ export async function POST(req: Request) {
   }
 
   const outcome = resolveOutcome(transactionStatus, fraudStatus);
+  const auditNote = `midtrans:${transactionStatus}${fraudStatus ? `/${fraudStatus}` : ""}`;
 
-  // Always keep an audit trail of the raw callback for forensic purposes.
-  await prisma.depositRequest.update({
-    where: { id: deposit.id },
-    data: {
-      note: `midtrans:${transactionStatus}${fraudStatus ? `/${fraudStatus}` : ""}`,
-    },
-  });
-
+  // All note writes are CAS-guarded on status === "PENDING" so that a late
+  // `cancel` / `expire` notification cannot overwrite the note of an already
+  // APPROVED/REJECTED deposit and corrupt the forensic audit trail.
   if (outcome === "FAILED") {
-    // Atomic CAS so a late `cancel`/`deny` can't overwrite an already-APPROVED
-    // row after a concurrent SETTLED call has credited the wallet.
     await prisma.depositRequest.updateMany({
       where: { id: deposit.id, status: "PENDING" },
-      data: {
-        status: "REJECTED",
-        note: `midtrans:${transactionStatus}${fraudStatus ? `/${fraudStatus}` : ""}`,
-      },
+      data: { status: "REJECTED", note: auditNote },
     });
     return NextResponse.json({ ok: true, outcome });
   }
 
-  if (outcome === "SETTLED" && deposit.status === "PENDING") {
+  if (outcome === "SETTLED") {
     // Idempotent atomic CAS to prevent double-credits on concurrent /
     // retried Midtrans webhooks. Under READ COMMITTED, `UPDATE ... WHERE
     // status='PENDING'` re-evaluates the WHERE clause after acquiring the
@@ -92,7 +83,7 @@ export async function POST(req: Request) {
     await prisma.$transaction(async (tx) => {
       const claim = await tx.depositRequest.updateMany({
         where: { id: deposit.id, status: "PENDING" },
-        data: { status: "APPROVED", approvedAt: new Date() },
+        data: { status: "APPROVED", approvedAt: new Date(), note: auditNote },
       });
       if (claim.count === 0) return; // already processed by another request
       const updated = await tx.depositRequest.findUniqueOrThrow({
@@ -116,7 +107,14 @@ export async function POST(req: Request) {
         });
       }
     });
+    return NextResponse.json({ ok: true, outcome });
   }
 
+  // outcome === "PENDING" — still record the intermediate state in the note
+  // (CAS-guarded so we don't stomp on a terminal status).
+  await prisma.depositRequest.updateMany({
+    where: { id: deposit.id, status: "PENDING" },
+    data: { note: auditNote },
+  });
   return NextResponse.json({ ok: true, outcome });
 }
