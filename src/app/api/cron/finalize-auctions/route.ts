@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { broadcastToSellerGroups, sendDirectMessage, phoneToJid } from "@/lib/wa-client";
 import { formatIDR } from "@/lib/utils";
+import { moveToEscrow } from "@/lib/wallet";
 
 export const dynamic = "force-dynamic";
 
@@ -57,29 +58,63 @@ export async function GET(req: Request) {
     const feeAmount = Math.round((topBid.amount * feeBps) / 10_000);
     const paymentDueAt = new Date(now.getTime() + PAYMENT_WINDOW_HOURS * 60 * 60 * 1000);
 
-    const order = await prisma.$transaction(async (tx) => {
+    const { order, autoPaid } = await prisma.$transaction(async (tx) => {
       await tx.auction.update({
         where: { id: auction.id },
-        data: { status: "ENDED", winnerId: topBid.userId, liveActive: false },
+        data: {
+          status: "ENDED",
+          winnerId: topBid.userId,
+          winningBid: topBid.amount,
+          liveActive: false,
+        },
       });
       await tx.koi.update({
         where: { id: auction.koiId },
         data: { status: "SOLD" },
       });
-      return tx.order.create({
+
+      // Try to auto-collect from winner wallet (they had to have balance >=
+      // bid when they placed it). If balance fell below by now we fall back
+      // to the classic BNR flow.
+      const wallet = await tx.wallet.findUnique({ where: { userId: topBid.userId } });
+      let autoPaidLocal = false;
+      if (wallet && wallet.availableBalance >= topBid.amount) {
+        await moveToEscrow(tx, {
+          userId: topBid.userId,
+          amount: topBid.amount,
+          type: "ESCROW_HOLD",
+          reference: auction.id,
+          note: `Auction win ${auction.koi.name}`,
+        });
+        autoPaidLocal = true;
+      }
+
+      const o = await tx.order.create({
         data: {
           koiId: auction.koiId,
           buyerId: topBid.userId,
           amount: topBid.amount,
           feeAmount,
-          status: "PENDING_PAYMENT",
-          paymentDueAt,
+          status: autoPaidLocal ? "PAID_ESCROW" : "PENDING_PAYMENT",
+          paymentDueAt: autoPaidLocal ? null : paymentDueAt,
+          paymentRef: autoPaidLocal ? `AUTO-WALLET-${auction.id}` : null,
           sourceAuctionId: auction.id,
         },
       });
+      return { order: o, autoPaid: autoPaidLocal };
     });
 
     closures.push({ auctionId: auction.id, orderId: order.id });
+
+    // Notify winner inside the app too
+    await prisma.notification.create({
+      data: {
+        userId: topBid.userId,
+        title: autoPaid ? "Lelang dimenangkan (auto-escrow)" : "Lelang dimenangkan — bayar sebelum deadline",
+        body: `Ikan ${auction.koi.name} ${autoPaid ? "— dana ditahan di escrow, menunggu pengiriman" : `— bayar ${formatIDR(topBid.amount)} sebelum ${paymentDueAt.toLocaleString("id-ID")}`}.`,
+        link: `/account`,
+      },
+    });
 
     const sellerGroupId = auction.koi.seller.whatsappGroupId;
     const text =

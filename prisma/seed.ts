@@ -379,7 +379,111 @@ async function main() {
   // Platform setting
   const existingSetting = await prisma.platformSetting.findFirst();
   if (!existingSetting) {
-    await prisma.platformSetting.create({ data: {} });
+    await prisma.platformSetting.create({
+      data: {
+        waBotNumber: "6281200000000",
+        waAutoReply:
+          "Halo! Balas BID <ID_AUCTION> <NOMINAL> untuk nge-bid. Ketik MENU untuk melihat bantuan lain.",
+      },
+    });
+  }
+
+  // Seed wallet + top-up mock for demo users
+  const buyers = await prisma.user.findMany({
+    where: { role: "BUYER" },
+    select: { id: true, email: true },
+  });
+  for (const b of buyers) {
+    await prisma.wallet.upsert({
+      where: { userId: b.id },
+      update: {},
+      create: {
+        userId: b.id,
+        availableBalance: 15_000_000,
+      },
+    });
+    const existingTx = await prisma.walletTx.count({
+      where: { userId: b.id, type: "DEPOSIT" },
+    });
+    if (existingTx === 0) {
+      await prisma.walletTx.create({
+        data: {
+          userId: b.id,
+          type: "DEPOSIT",
+          amount: 15_000_000,
+          balanceAfter: 15_000_000,
+          escrowAfter: 0,
+          note: "Seed top-up (mock)",
+        },
+      });
+    }
+  }
+  const sellerUsers = await prisma.user.findMany({
+    where: { role: "SELLER" },
+    select: { id: true },
+  });
+  for (const s of sellerUsers) {
+    await prisma.wallet.upsert({
+      where: { userId: s.id },
+      update: {},
+      create: {
+        userId: s.id,
+        sellerDepositBalance: 5_000_000,
+      },
+    });
+  }
+
+  // Seed a consignment listing
+  const ownerForKC = await prisma.user.findUnique({
+    where: { email: "hobbyist@mafiakoi.id" },
+  });
+  const hostForKC = sellerRecords[2]; // Nirwana
+  if (ownerForKC && hostForKC) {
+    const existingKC = await prisma.consignmentListing.findFirst({
+      where: { ownerUserId: ownerForKC.id },
+    });
+    if (!existingKC) {
+      await prisma.consignmentListing.create({
+        data: {
+          ownerUserId: ownerForKC.id,
+          hostSellerId: hostForKC.id,
+          koiName: "Showa Konsinyasi 42cm",
+          sizeCm: 42,
+          bloodline: "Dainichi",
+          description:
+            "Showa hasil breeding sendiri, mohon bantu dijualkan dengan harga wajar.",
+          askingPrice: 4_500_000,
+          status: "PENDING",
+          photoUrl: IMG.showa,
+        },
+      });
+    }
+  }
+
+  // Seed an azukari contract
+  const ownerForAzu = await prisma.user.findUnique({
+    where: { email: "kolektor@mafiakoi.id" },
+  });
+  const hostForAzu = sellerRecords[0]; // Sakai
+  if (ownerForAzu && hostForAzu) {
+    const existingAzu = await prisma.azukariContract.findFirst({
+      where: { ownerUserId: ownerForAzu.id },
+    });
+    if (!existingAzu) {
+      await prisma.azukariContract.create({
+        data: {
+          ownerUserId: ownerForAzu.id,
+          hostSellerId: hostForAzu.id,
+          koiName: "Showa Collection 55cm",
+          sizeCm: 55,
+          bloodline: "Hiroshima",
+          photoUrl: IMG.showa,
+          monthlyFeeIDR: 350_000,
+          status: "ACTIVE",
+          note: "Karantina kontes Banjarmasin Q2.",
+        },
+      });
+    }
   }
 
   // Community posts

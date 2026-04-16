@@ -3,15 +3,21 @@
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { useState } from "react";
-import { Menu, X, Fish, Gavel, Video, Crown, Users, LayoutDashboard, ShieldCheck } from "lucide-react";
+import { Menu, X, Fish, Gavel, Video, Crown, Users, LayoutDashboard, ShieldCheck, Trophy, Wallet, Heart } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
   { href: "/marketplace", label: "Marketplace", icon: Fish },
   { href: "/auctions", label: "Lelang", icon: Gavel },
   { href: "/live", label: "Live", icon: Video },
+  { href: "/leaderboard", label: "Leaderboard", icon: Trophy },
   { href: "/membership", label: "Membership", icon: Crown },
   { href: "/community", label: "Komunitas", icon: Users },
+];
+
+const LOGGED_NAV = [
+  { href: "/wallet", label: "Wallet", icon: Wallet },
+  { href: "/wishlist", label: "Wishlist", icon: Heart },
 ];
 
 export function SiteNavbar() {
@@ -51,6 +57,16 @@ export function SiteNavbar() {
           </nav>
         </div>
         <div className="hidden items-center gap-2 lg:flex">
+          {session?.user &&
+            LOGGED_NAV.map((n) => (
+              <Link
+                key={n.href}
+                href={n.href}
+                className="rounded-full px-3 py-1.5 text-sm text-koi-platinum/80 transition hover:bg-koi-panel hover:text-white"
+              >
+                <n.icon size={14} className="mr-1 inline" /> {n.label}
+              </Link>
+            ))}
           {isAdmin && (
             <Link href="/admin" className="btn-ghost">
               <ShieldCheck size={14} /> Admin
@@ -106,6 +122,17 @@ export function SiteNavbar() {
               <n.icon size={16} /> {n.label}
             </Link>
           ))}
+          {session?.user &&
+            LOGGED_NAV.map((n) => (
+              <Link
+                key={n.href}
+                href={n.href}
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-koi-platinum hover:bg-koi-panel"
+              >
+                <n.icon size={16} /> {n.label}
+              </Link>
+            ))}
           <div className="divider my-2" />
           {isAdmin && (
             <Link href="/admin" className="btn-ghost w-full justify-start">

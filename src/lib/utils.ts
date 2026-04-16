@@ -52,6 +52,43 @@ export function tierRank(tier: string): number {
   return ["NONE", "SILVER", "GOLD", "PLATINUM"].indexOf(tier);
 }
 
+export const AUCTION_KIND_LABEL: Record<string, string> = {
+  OB: "Open Bid",
+  KB: "Kelipatan Bid",
+  BIN: "Buy It Now",
+};
+
+export const WALLET_TX_LABEL: Record<string, string> = {
+  DEPOSIT: "Top Up Deposit",
+  WITHDRAW: "Penarikan",
+  BID_HOLD: "Hold Bid",
+  BID_RELEASE: "Release Bid",
+  WIN_DEBIT: "Pembelian Lelang",
+  ESCROW_HOLD: "Dana Masuk Escrow",
+  ESCROW_RELEASE: "Escrow Dicairkan",
+  FEE: "Biaya Platform",
+  PENALTY: "Penalti BNR",
+  SELLER_DEPOSIT: "Deposit Seller",
+  SELLER_PAYOUT: "Payout Seller",
+  REFUND: "Pengembalian",
+  ADJUSTMENT: "Penyesuaian",
+};
+
+export const DEPOSIT_STATUS_LABEL: Record<string, string> = {
+  PENDING: "Menunggu",
+  APPROVED: "Disetujui",
+  REJECTED: "Ditolak",
+  CANCELLED: "Dibatalkan",
+};
+
+export const WITHDRAWAL_STATUS_LABEL: Record<string, string> = {
+  PENDING: "Menunggu",
+  APPROVED: "Disetujui",
+  PAID: "Sudah Transfer",
+  REJECTED: "Ditolak",
+  CANCELLED: "Dibatalkan",
+};
+
 export function msUntil(date: Date | string): number {
   const t = typeof date === "string" ? new Date(date).getTime() : date.getTime();
   return Math.max(0, t - Date.now());
