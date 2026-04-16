@@ -8,6 +8,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { creditAvailable, creditSellerDeposit } from "@/lib/wallet";
+import { getMidtransConfig, createSnapTransaction } from "@/lib/midtrans";
 import type { PaymentMethod } from "@prisma/client";
 
 const schema = z.object({
@@ -95,6 +96,56 @@ export async function POST(req: Request) {
     }
     return dep;
   });
+
+  // For MIDTRANS we mint a Snap transaction right after creating the deposit.
+  // The deposit stays PENDING until the `/api/midtrans/webhook` notification
+  // confirms settlement, which then credits the wallet. If Snap fails we let
+  // the caller retry — the DepositRequest row is already persisted.
+  if (method === "MIDTRANS") {
+    const cfg = getMidtransConfig();
+    if (!cfg) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Midtrans belum dikonfigurasi di server (MIDTRANS_SERVER_KEY / MIDTRANS_CLIENT_KEY)",
+        },
+        { status: 503 },
+      );
+    }
+    try {
+      const appUrl =
+        process.env.NEXTAUTH_URL ?? process.env.APP_URL ?? "http://localhost:3000";
+      const snap = await createSnapTransaction(cfg, {
+        orderId: deposit.id,
+        grossAmount: amount,
+        customer: {
+          name: user.name ?? user.email ?? "KXA User",
+          email: user.email ?? "",
+        },
+        itemName:
+          purpose === "SELLER" ? "KXA Seller Deposit" : "KXA Wallet Top-up",
+        finishRedirectUrl: `${appUrl.replace(/\/$/, "")}/wallet?deposit=${deposit.id}`,
+      });
+      return NextResponse.json({
+        ok: true,
+        deposit,
+        snap: { token: snap.token, redirectUrl: snap.redirect_url },
+      });
+    } catch (e) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            e instanceof Error
+              ? `Gagal membuat transaksi Midtrans: ${e.message}`
+              : "Gagal membuat transaksi Midtrans",
+          deposit,
+        },
+        { status: 502 },
+      );
+    }
+  }
 
   return NextResponse.json({ ok: true, deposit });
 }

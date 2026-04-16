@@ -15,6 +15,11 @@ const koiCategories = [
   "RARE_COLLECTION",
 ] as const;
 
+const mediaItemSchema = z.object({
+  url: z.string().url(),
+  type: z.enum(["image", "video"]).default("image"),
+});
+
 const schema = z.object({
   name: z.string().min(2),
   category: z.enum(koiCategories),
@@ -25,6 +30,7 @@ const schema = z.object({
   sex: z.string().optional(),
   description: z.string().min(2),
   coverImage: z.string().url(),
+  media: z.array(mediaItemSchema).max(20).optional(),
   price: z.number().int().min(0).default(0),
   mode: z.enum(["FIXED", "AUCTION"]),
   startingBid: z.number().int().min(0).optional(),
@@ -76,6 +82,15 @@ export async function POST(req: Request) {
       price: data.mode === "AUCTION" ? data.startingBid ?? 0 : data.price,
       mode: data.mode,
       status: "PENDING_APPROVAL",
+      media: data.media?.length
+        ? {
+            create: data.media.map((m, idx) => ({
+              url: m.url,
+              type: m.type,
+              order: idx,
+            })),
+          }
+        : undefined,
     },
   });
 
