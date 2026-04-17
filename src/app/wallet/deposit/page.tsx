@@ -13,6 +13,9 @@ export default async function DepositPage() {
     (await prisma.platformSetting.findFirst()) ??
     (await prisma.platformSetting.create({ data: {} }));
   const isSeller = Boolean(user.sellerId);
+  const midtransEnabled = Boolean(
+    process.env.MIDTRANS_SERVER_KEY && process.env.MIDTRANS_CLIENT_KEY,
+  );
   return (
     <div className="container-page py-10">
       <p className="text-xs uppercase tracking-widest text-koi-muted">Wallet</p>
@@ -21,15 +24,17 @@ export default async function DepositPage() {
         Buyer wajib deposit sebelum bid (min.{" "}
         <span className="text-koi-gold">{formatIDR(setting.minBuyerDepositIDR)}</span>).
         Seller bisa deposit jaminan (min.{" "}
-        <span className="text-koi-gold">{formatIDR(setting.minSellerDepositIDR)}</span>).
-        Saat ini semua deposit menggunakan MOCK payment (auto-approve) sehingga flow bisa
-        diuji tanpa payment gateway.
+        <span className="text-koi-gold">{formatIDR(setting.minSellerDepositIDR)}</span>).{" "}
+        {midtransEnabled
+          ? "Pembayaran diproses via Midtrans (VA / QRIS / e-wallet). Saldo terkredit otomatis setelah payment settled."
+          : "Mode MOCK aktif — deposit langsung auto-approve untuk development."}
       </p>
       <div className="mt-6 max-w-xl">
         <DepositForm
           allowSeller={isSeller}
           minBuyerIDR={setting.minBuyerDepositIDR}
           minSellerIDR={setting.minSellerDepositIDR}
+          midtransEnabled={midtransEnabled}
         />
       </div>
     </div>

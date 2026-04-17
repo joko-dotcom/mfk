@@ -4,18 +4,25 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { formatIDR } from "@/lib/utils";
 
+type DepositMethod = "MOCK" | "MIDTRANS";
+
 export function DepositForm({
   allowSeller,
   minBuyerIDR,
   minSellerIDR,
+  midtransEnabled,
 }: {
   allowSeller: boolean;
   minBuyerIDR: number;
   minSellerIDR: number;
+  midtransEnabled: boolean;
 }) {
   const router = useRouter();
   const [amount, setAmount] = useState(minBuyerIDR);
   const [purpose, setPurpose] = useState<"BUYER" | "SELLER">("BUYER");
+  const [method, setMethod] = useState<DepositMethod>(
+    midtransEnabled ? "MIDTRANS" : "MOCK",
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -28,14 +35,20 @@ export function DepositForm({
     const res = await fetch("/api/wallet/deposit", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ amount, purpose, method: "MOCK" }),
+      body: JSON.stringify({ amount, purpose, method }),
     });
     const json = await res.json();
-    setSubmitting(false);
     if (!res.ok) {
+      setSubmitting(false);
       setError(json.error ?? "Gagal top up");
       return;
     }
+    // Midtrans path: redirect to Snap hosted page.
+    if (json.snap?.redirectUrl) {
+      window.location.href = json.snap.redirectUrl as string;
+      return;
+    }
+    setSubmitting(false);
     setSuccess(true);
     setTimeout(() => router.push("/wallet"), 800);
     router.refresh();
@@ -66,6 +79,27 @@ export function DepositForm({
           </div>
         </div>
       )}
+      {midtransEnabled && (
+        <div>
+          <label className="label">Metode Pembayaran</label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setMethod("MIDTRANS")}
+              className={method === "MIDTRANS" ? "btn-gold flex-1" : "btn-ghost flex-1"}
+            >
+              Midtrans (VA / QRIS / e-wallet)
+            </button>
+            <button
+              type="button"
+              onClick={() => setMethod("MOCK")}
+              className={method === "MOCK" ? "btn-gold flex-1" : "btn-ghost flex-1"}
+            >
+              Mock (dev only)
+            </button>
+          </div>
+        </div>
+      )}
       <div>
         <label className="label">Nominal (IDR)</label>
         <input
@@ -78,7 +112,10 @@ export function DepositForm({
           required
         />
         <p className="mt-1 text-xs text-koi-muted">
-          Minimal {formatIDR(min)}. Mode MOCK — auto-approve untuk development.
+          Minimal {formatIDR(min)}.{" "}
+          {method === "MIDTRANS"
+            ? "Anda akan diarahkan ke halaman pembayaran Midtrans."
+            : "Mode MOCK — auto-approve untuk development."}
         </p>
       </div>
       {error && <p className="text-sm text-koi-red">{error}</p>}

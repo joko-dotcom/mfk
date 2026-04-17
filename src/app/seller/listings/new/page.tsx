@@ -5,6 +5,11 @@ import { useSession } from "next-auth/react";
 import { useState } from "react";
 import Link from "next/link";
 import { CATEGORY_LABEL } from "@/lib/utils";
+import {
+  MediaUploader,
+  MediaThumb,
+  type UploadedMedia,
+} from "@/components/media-uploader";
 
 const SAMPLE_IMAGES = [
   "https://images.unsplash.com/photo-1583212292454-1fe6229603b7?auto=format&fit=crop&w=900&q=80",
@@ -34,6 +39,7 @@ export default function NewListingPage() {
     memberOnly: false,
     minTier: "NONE" as "NONE" | "SILVER" | "GOLD" | "PLATINUM",
   });
+  const [media, setMedia] = useState<UploadedMedia[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -70,7 +76,10 @@ export default function NewListingPage() {
     const res = await fetch("/api/koi", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(form),
+      body: JSON.stringify({
+        ...form,
+        media: media.map(({ url, type }) => ({ url, type })),
+      }),
     });
     const data = await res.json().catch(() => ({}));
     setLoading(false);
@@ -172,29 +181,71 @@ export default function NewListingPage() {
               />
             </div>
             <div className="col-span-2">
-              <label className="label">Foto Cover (URL)</label>
-              <input
-                required
-                className="input"
-                value={form.coverImage}
-                onChange={(e) => setForm({ ...form, coverImage: e.target.value })}
-              />
-              <p className="mt-1 text-xs text-koi-muted">
-                Cloudinary upload belum aktif di MVP — paste URL dulu. Contoh sample:
-              </p>
-              <div className="mt-2 flex gap-2">
-                {SAMPLE_IMAGES.map((url) => (
-                  <button
-                    type="button"
-                    key={url}
-                    onClick={() => setForm({ ...form, coverImage: url })}
-                    className="h-14 w-14 overflow-hidden rounded border border-koi-border"
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={url} alt="" className="h-full w-full object-cover" />
-                  </button>
-                ))}
+              <label className="label">Foto Cover</label>
+              <div className="grid gap-3 sm:grid-cols-[120px_1fr]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={form.coverImage}
+                  alt=""
+                  className="h-28 w-full rounded border border-koi-border object-cover"
+                />
+                <div className="space-y-2">
+                  <MediaUploader
+                    label="Upload foto cover"
+                    accept="image/*"
+                    folder="koi/cover"
+                    onUploaded={(items) => {
+                      const img = items.find((i) => i.type === "image");
+                      if (img)
+                        setForm((prev) => ({ ...prev, coverImage: img.url }));
+                    }}
+                  />
+                  <input
+                    className="input text-xs"
+                    value={form.coverImage}
+                    onChange={(e) =>
+                      setForm({ ...form, coverImage: e.target.value })
+                    }
+                    placeholder="atau paste URL foto"
+                  />
+                  <div className="flex gap-2">
+                    {SAMPLE_IMAGES.map((url) => (
+                      <button
+                        type="button"
+                        key={url}
+                        onClick={() => setForm({ ...form, coverImage: url })}
+                        className="h-10 w-10 overflow-hidden rounded border border-koi-border"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={url} alt="" className="h-full w-full object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
+            </div>
+            <div className="col-span-2">
+              <label className="label">Galeri foto &amp; video</label>
+              <MediaUploader
+                label="Tambah foto / video (bisa pilih beberapa)"
+                accept="image/*,video/*"
+                multiple
+                folder="koi/gallery"
+                onUploaded={(items) => setMedia((m) => [...m, ...items])}
+              />
+              {media.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {media.map((m, idx) => (
+                    <MediaThumb
+                      key={m.publicId}
+                      item={m}
+                      onRemove={() =>
+                        setMedia((prev) => prev.filter((_, i) => i !== idx))
+                      }
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
