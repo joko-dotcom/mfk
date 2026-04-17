@@ -19,6 +19,11 @@ const schema = z.object({
 });
 
 const AUTO_APPROVE = process.env.PLATFORM_DEPOSIT_AUTO_APPROVE !== "false";
+// Allow MOCK deposits even when Midtrans is configured. Opt-in so staging/prod
+// environments with real gateway credentials can't accidentally let users
+// self-credit via `{method: "MOCK"}`.
+const ALLOW_MOCK_WITH_GATEWAY =
+  process.env.PLATFORM_ALLOW_MOCK_DEPOSIT === "true";
 
 export async function GET() {
   let user;
@@ -48,6 +53,24 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Input tidak valid" }, { status: 400 });
   }
   const { amount, method, purpose, note } = parsed.data;
+
+  // Block MOCK self-credit when a real gateway is configured. MOCK is a dev
+  // convenience; once MIDTRANS_SERVER_KEY etc. are set, any authenticated
+  // user could otherwise POST `{method: "MOCK"}` and credit themselves.
+  if (
+    method === "MOCK" &&
+    !ALLOW_MOCK_WITH_GATEWAY &&
+    getMidtransConfig() !== null
+  ) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "MOCK deposit dinonaktifkan karena payment gateway aktif. Set PLATFORM_ALLOW_MOCK_DEPOSIT=true hanya untuk development.",
+      },
+      { status: 400 },
+    );
+  }
 
   const setting = await prisma.platformSetting.findFirst();
   const min =

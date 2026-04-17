@@ -89,6 +89,21 @@ export async function POST(req: Request) {
       const updated = await tx.depositRequest.findUniqueOrThrow({
         where: { id: deposit.id },
       });
+      // Defense in depth: ensure the gateway-reported amount matches what we
+      // stored when we minted the Snap token. If they diverge (admin tool
+      // edit, rogue row write, tampered notification that still had a valid
+      // signature somehow), do NOT credit — just leave it APPROVED with the
+      // audit note for manual reconciliation.
+      const reportedAmount = Number.parseInt(grossAmount, 10);
+      if (!Number.isFinite(reportedAmount) || reportedAmount !== updated.amount) {
+        // eslint-disable-next-line no-console
+        console.error("[midtrans] gross_amount mismatch", {
+          orderId: updated.id,
+          expected: updated.amount,
+          got: grossAmount,
+        });
+        return;
+      }
       if (updated.purpose === "SELLER") {
         await creditSellerDeposit(tx, {
           userId: updated.userId,
