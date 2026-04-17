@@ -196,7 +196,8 @@ export default function NewListingPage() {
                     folder="koi/cover"
                     onUploaded={(items) => {
                       const img = items.find((i) => i.type === "image");
-                      if (img) setForm({ ...form, coverImage: img.url });
+                      if (img)
+                        setForm((prev) => ({ ...prev, coverImage: img.url }));
                     }}
                   />
                   <input
